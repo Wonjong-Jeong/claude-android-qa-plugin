@@ -4,7 +4,7 @@ description: >
   Use this skill when the user wants to write Gherkin feature specs and ViewModel unit tests from a Figma design spec,
   screen description, or existing UI spec. Triggers on phrases like "스펙 작성해줘", "feature 파일 써줘",
   "테스트 코드 작성해줘", "뷰모델 테스트 짜줘", "Figma 보고 테스트 만들어줘", "/spec-writer".
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Spec Writer
@@ -38,6 +38,10 @@ version: 2.0.0
 - **화면 이름만 제공 (project_root 없음)**: project_root를 질문합니다. 제공이 어렵다면 인터랙션 목록을 직접 입력받아 진행합니다.
 - **자유 형식 설명**: 그대로 사용합니다.
 
+입력 수집 시, 대상 화면에 도달하기 위해 **다른 화면을 거쳐야 하는지** 파악합니다:
+- 진입 경로에 여러 화면이 포함된 경우 → 각 화면 이름을 목록으로 정리합니다.
+- 경로가 명확하지 않으면 한 가지만 질문합니다: "이 화면에 도달하려면 어떤 화면들을 거치나요?"
+
 입력이 충분하면 Phase 2로, 부족하면 부족한 부분만 질문합니다. 한 번에 여러 가지를 묻지 않습니다.
 
 ### Phase 2 — 코드베이스 탐색
@@ -46,9 +50,12 @@ project_root가 제공된 경우, 다음을 탐색하여 기존 패턴을 파악
 `module_path`가 제공된 경우 해당 모듈 우선 탐색, 미제공 시 프로젝트 전체 탐색합니다.
 
 ```
-# .feature 파일 탐색 (있으면 불러와서 편집 모드)
+# 대상 화면 .feature 파일 탐색 (있으면 불러와서 편집 모드)
 Glob: <project_root>/<module_path>/src/uiTest/specs/<ScreenName>.feature
 Glob: <project_root>/**/src/uiTest/specs/<ScreenName>.feature   ← module_path 미제공 시
+
+# 진입 경로 화면들의 .feature 파일 탐색 (flow 합성용)
+Glob: <project_root>/**/src/uiTest/specs/<RefScreenName>.feature  ← 경로 상의 각 화면마다 반복
 
 # 소스 탐색
 Glob: <project_root>/**/*<ScreenName>*ViewModel*.kt
@@ -58,6 +65,8 @@ Glob: <project_root>/**/*<ScreenName>*Screen*.kt
 
 탐색 목적:
 - 기존 `.feature` 파일이 있으면 → 불러와 편집 모드로 진행 (새로 작성하지 않음)
+- **진입 경로 화면의 `.feature`가 있으면** → `@flow-ref` 태그와 `Given <Name> flow를 완료한다` 패턴으로 참조
+- **진입 경로 화면의 `.feature`가 없으면** → Background에 직접 단계를 서술하고, 해당 화면의 스펙도 별도로 작성할 것을 권장
 - ViewModel이 있으면 → 인터랙션 목록과 UiState 필드 파악
 - 기존 테스트 파일이 있으면 → 작성 스타일 파악
 - 없으면 → 입력 스펙만으로 진행
@@ -167,10 +176,22 @@ Feature: 포스트 상세 화면 — 좋아요 기능
 모든 Scenario에 공통으로 필요한 진입 단계는 Background로 묶습니다.
 ui-test-agent가 이를 UI 테스트의 entry_steps로 변환합니다.
 
+**단일 화면 진입 (참조 flow 없음)**:
 ```gherkin
 Background:
   Given Content 탭을 탭한다
   And 첫 번째 포스트 카드를 탭하여 상세 화면에 진입한다
+```
+
+**멀티 화면 진입 (참조 flow 있음)** → 규칙 G6 참고:
+```gherkin
+@flow-ref: Login, Home
+Feature: A 화면 — 좋아요 기능
+
+Background:
+  Given Login flow를 완료한다
+  And Home flow를 완료한다
+  And 첫 번째 포스트 카드를 탭하여 A 화면에 진입한다
 ```
 
 ### 규칙 G3 — Scenario: 전제 조건 × 인터랙션 수만큼 분리
@@ -204,7 +225,44 @@ Then 하트 아이콘이 채워진 빨간색으로 변경된다
 And 좋아요 수 텍스트가 증가한다
 ```
 
-### 규칙 G5 — @manual-only: Journey 자동화 불가 케이스 태그
+### 규칙 G6 — @flow-ref: 멀티 화면 진입 경로 합성
+
+대상 화면에 도달하기 위해 다른 화면을 거쳐야 하는 경우, `@flow-ref` 태그로 의존 화면을 선언합니다.
+ui-test-agent가 이 태그를 보고 참조된 화면의 `.feature`를 찾아 Maestro `runFlow`로 합성합니다.
+
+**선언 위치**: Feature 바로 위
+
+```gherkin
+@flow-ref: Login, Home
+Feature: 포스트 상세 화면 — 좋아요 기능
+```
+
+**Background에서 참조 방법**: `Given <화면명> flow를 완료한다`
+
+```gherkin
+@flow-ref: Login, Home
+Feature: 포스트 상세 화면 — 좋아요 기능
+
+Background:
+  Given Login flow를 완료한다          ← Login.feature의 Background 전체 실행
+  And Home flow를 완료한다             ← Home.feature의 Background 전체 실행
+  And 첫 번째 포스트 카드를 탭하여 상세 화면에 진입한다  ← 이 화면 전용 진입 단계
+```
+
+**참조 화면의 `.feature`가 없는 경우**:
+
+```gherkin
+# @flow-ref 없이 Background에 직접 서술
+Background:
+  Given 앱을 실행한다
+  And 이메일 "test@example.com"과 비밀번호 "password"로 로그인한다
+  And 홈 화면의 Content 탭을 탭한다
+  And 첫 번째 포스트 카드를 탭하여 상세 화면에 진입한다
+```
+
+이 경우 ui-test-agent는 각 단계를 개별 Maestro 액션으로 변환합니다. 참조 화면의 스펙 작성을 권장합니다.
+
+### 규칙 G5 — @manual-only: UI 테스트 자동화 불가 케이스 태그
 
 API 실패처럼 앱 실행 중 DI 주입 없이는 재현할 수 없는 케이스에 태그를 붙입니다.
 ui-test-agent가 이 태그를 보고 UI 테스트 생성을 건너뛰고 보고서에 "수동 테스트 필요"로 분류합니다.
@@ -287,6 +345,8 @@ assertTrue("하트 아이콘이 채워진 빨간색으로 변경되어야 함", 
 | "N번만 코드 써줘" | 해당 Scenario만 코드 작성 |
 | "파일로 저장해줘" | 경로 확인 후 파일 저장, 저장 후 ui-test-agent 실행 방법 안내 |
 | "처음부터 다시" | 목록 초기화, 새 초안 제시 |
+| "로그인 화면 거쳐야 해" / "B 화면 통해서 들어가" | @flow-ref 태그 추가, Background에 참조 flow 단계 삽입 |
+| "참조 flow 없애줘" | @flow-ref 제거, Background를 직접 단계로 전환 |
 
 유저가 모호하게 말할 경우, 단 하나의 질문만 합니다. 여러 가지를 동시에 묻지 않습니다.
 
