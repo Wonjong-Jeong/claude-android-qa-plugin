@@ -74,16 +74,23 @@ test_files:                 # 선택 — 명시 시 3순위로 우선 적용
 
 모든 항목을 순서대로 점검합니다. 미비 항목이 발견되면 즉시 안내를 출력하고 사용자 확인을 받은 뒤 다음 단계로 진행합니다.
 
-#### 1.1 Maestro CLI 설치 확인
+#### 1.1 Maestro CLI 설치 및 PATH 확인
+
+Maestro 바이너리를 자동 탐지합니다. PATH에 없는 경우 일반적인 설치 위치도 확인합니다.
 
 ```bash
-maestro --version
+# 1차: PATH 탐색
+which maestro 2>/dev/null || command -v maestro 2>/dev/null
+
+# 2차: 일반적인 설치 위치 폴백
+[ -x "$HOME/.maestro/bin/maestro" ] && echo "$HOME/.maestro/bin/maestro"
+[ -x "/opt/homebrew/bin/maestro" ] && echo "/opt/homebrew/bin/maestro"
 ```
 
 | 결과 | 처리 |
 |---|---|
-| 버전 출력됨 | ✅ 정상 진행 |
-| command not found | ⚠️ 아래 안내 출력 후 계속 여부 확인 |
+| 바이너리 발견됨 | ✅ `MAESTRO_BIN` 변수에 전체 경로 저장, 이후 모든 실행에 해당 경로 사용 |
+| 어디에서도 미발견 | ⚠️ 아래 안내 출력 후 계속 여부 확인 |
 
 Maestro 미설치 시 안내:
 ```
@@ -102,6 +109,8 @@ Flow YAML만 생성하고 실행을 건너뛰려면 'y'를 입력하세요.
 
 계속 진행하시겠습니까? (y/n)
 ```
+
+> ℹ️ 이후 Phase 4의 모든 `maestro` 명령은 `$MAESTRO_BIN`으로 실행합니다.
 
 #### 1.2 ADB 기기 연결 확인
 
@@ -166,7 +175,45 @@ adb shell pm list packages | grep <app_package>
 계속 진행하시겠습니까? (y/n)
 ```
 
-#### 1.4 Flow 출력 디렉토리 생성
+#### 1.4 testTagsAsResourceId 사전 검증
+
+Compose `testTag`가 UIAutomator/Maestro에서 `resource-id`로 인식되려면 루트 Composable에 `testTagsAsResourceId = true`가 설정되어 있어야 합니다. 이 설정이 없으면 `id` 기반 탐색이 **전부 실패**합니다.
+
+```bash
+# MainActivity 또는 루트 Activity에서 testTagsAsResourceId 설정 확인
+grep -rn "testTagsAsResourceId" <project_root>/app/src/main/ --include="*.kt"
+```
+
+| 결과 | 처리 |
+|---|---|
+| `testTagsAsResourceId = true` 발견 | ✅ 정상 진행 |
+| 미발견 | 🔴 아래 안내 출력 후 자동 수정 제안 |
+
+미설정 시 안내:
+```
+🔴 [Critical] testTagsAsResourceId 미설정 — Maestro id 기반 탐색 전면 실패
+───────────────────────────────────────────────────────────────────
+Compose testTag가 UIAutomator resource-id로 노출되려면
+루트 Activity의 setContent {} 내에 다음이 필요합니다:
+
+  import androidx.compose.ui.ExperimentalComposeUiApi
+  import androidx.compose.ui.semantics.semantics
+  import androidx.compose.ui.semantics.testTagsAsResourceId
+
+  @OptIn(ExperimentalComposeUiApi::class)
+  Scaffold(
+      modifier = Modifier.semantics { testTagsAsResourceId = true }
+  ) { ... }
+
+자동으로 추가하시겠습니까? (y/n)
+```
+
+사용자가 `y`를 선택하면:
+1. `setContent` 또는 루트 `Scaffold`/`Surface`를 찾아 `Modifier.semantics { testTagsAsResourceId = true }` 추가
+2. 필요한 import 및 `@OptIn(ExperimentalComposeUiApi::class)` 추가
+3. 앱 재빌드 안내
+
+#### 1.5 Flow 출력 디렉토리 생성
 
 ```bash
 mkdir -p <project_root>/<module_path>/maestro/flows/<screen_name>
@@ -364,7 +411,114 @@ Scenario별로 YAML 파일을 분리합니다.
 | 숫자 증감 | `- assertVisible: id: "<카운트 요소 id>"` (시각 검증) |
 | `@manual-only` Scenario | ❌ YAML 생성 안 함 — 보고서 "수동 테스트 필요" 섹션에 기록 |
 
-**앱 UI 언어 처리**: `entry_steps` 또는 `.feature` 파일의 언어를 감지하여 Flow YAML 내 텍스트도 동일 언어로 작성합니다.
+#### 3.3 YAML 생성 가드레일
+
+생성된 YAML 파일은 아래 가드레일을 **전부 통과**해야 저장됩니다. 위반 항목이 있으면 자동 수정 후 저장합니다.
+
+**3.3.1 Maestro 명령어 화이트리스트 검증**
+
+생성된 YAML의 모든 최상위 키가 아래 화이트리스트에 포함되어야 합니다.
+
+```
+허용 명령어:
+  launchApp, stopApp, tapOn, longPressOn, inputText, eraseText,
+  assertVisible, assertNotVisible, extendedWaitUntil,
+  pressKey, hideKeyboard, scroll, swipe, scrollUntilVisible,
+  runFlow, back, waitForAnimationToEnd, runScript,
+  openLink, setLocation, repeat, evalScript, assertTrue,
+  copyTextFrom, pasteText, takeScreenshot, startRecording, stopRecording
+
+금지 명령어 (자동 교정):
+  clearInput → eraseText: <길이>
+  clearState → (제거, config.yaml에서만 사용)
+  waitFor    → extendedWaitUntil
+```
+
+위반 발견 시: 자동 교정 적용 후 `⚠️ 명령어 자동 교정: clearInput → eraseText` 로그 출력.
+
+**3.3.2 inputText Unicode 차단 (Critical)**
+
+`inputText` 값에 **non-ASCII 문자(한글, 이모지 등)가 포함되면 안 됩니다.** Maestro는 Unicode 문자 입력을 지원하지 않으며, 실행 시 `"Unicode character input is not supported"` 에러가 발생합니다.
+
+```yaml
+# ❌ 실행 시 에러 발생
+- inputText: "뿡뿡이네"
+- inputText: "엄마"
+
+# ✅ ASCII 문자만 사용
+- inputText: "TestGroup1"
+- inputText: "mom"
+```
+
+검증 규칙:
+- 생성된 모든 `inputText` 값을 스캔하여 non-ASCII 문자 포함 여부 확인
+- non-ASCII 발견 시 → **자동으로 ASCII 대체값 생성** (아래 매핑 테이블 우선, 없으면 `"Test" + 일련번호`)
+- 대체 후, 동일 값을 참조하는 `assertVisible: { text: "..." }` 도 함께 업데이트
+
+**한글 → ASCII 기본 매핑 테이블**:
+
+| 문맥 | 한글 예시 | ASCII 대체 |
+|---|---|---|
+| 그룹/팀 이름 | "뿡뿡이네", "우리 가족" | "TestGroup1", "TestTeam1" |
+| 아기 이름 | "이인우", "서연이" | "TestBaby", "TestChild" |
+| 닉네임/역할 | "엄마", "아빠", "이모" | "mom", "dad", "auntie" |
+| 일반 텍스트 | "안녕하세요" | "Hello" |
+| 이메일 | — | "test@example.com" |
+| 코드/번호 | — | "ABC123" |
+
+> ⚠️ **assertVisible은 한글 허용**: `assertVisible: { text: "한글" }`은 정상 동작합니다. Unicode 제한은 `inputText`에만 적용됩니다.
+> 단, `inputText`로 입력한 값을 `assertVisible`로 검증할 때는 **입력한 ASCII 값과 일치**해야 합니다.
+
+**3.3.3 hideKeyboard 자동 삽입**
+
+텍스트 입력 후 다른 요소를 탭하면 소프트 키보드가 해당 요소를 가릴 수 있습니다.
+
+자동 삽입 규칙:
+- `inputText` 바로 다음에 `tapOn` (다른 요소)이 오는 패턴 감지
+- 두 명령 사이에 `- hideKeyboard` 자동 삽입
+
+```yaml
+# 자동 삽입 전
+- inputText: "TestBaby"
+- tapOn:
+    id: "btn_calendar_toggle"    # 키보드에 가려서 실패 가능
+
+# 자동 삽입 후
+- inputText: "TestBaby"
+- hideKeyboard                   # ← 자동 삽입
+- tapOn:
+    id: "btn_calendar_toggle"
+```
+
+예외: `inputText` 직후 동일 필드에 대한 `tapOn`이면 삽입하지 않음.
+
+**3.3.4 공통 네비게이션 플로우 자동 생성**
+
+각 YAML 파일은 반드시 앱 실행 상태를 보장하는 진입점으로 시작해야 합니다.
+
+규칙:
+1. `.feature` Background 또는 `entry_steps`에서 네비게이션 체인을 분석
+2. 공통으로 사용되는 네비게이션 시퀀스를 `common/` 디렉토리에 별도 YAML로 추출
+3. 개별 테스트 YAML은 `runFlow: ../common/<flow_name>.yaml`로 참조
+4. **네비게이션 깊이 ≥ 3인 화면**은 전용 common flow 생성 (예: `navigate_to_baby_register.yaml`)
+
+공통 플로우 기본 구조:
+```yaml
+# common/launch_to_home.yaml — 앱 실행 → 홈 화면 진입
+appId: <app_package>
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: "<홈 화면 고유 요소>"
+    timeout: 15000
+```
+
+> ℹ️ `launchApp` 없이 바로 `assertVisible`로 시작하는 YAML은 **전부 실패**합니다. 모든 테스트 YAML은 반드시 `launchApp` 또는 `runFlow`(common flow 참조)로 시작해야 합니다.
+
+---
+
+**앱 UI 언어 처리**: `entry_steps` 또는 `.feature` 파일의 언어를 감지하여 Flow YAML 내 `assertVisible` 텍스트도 동일 언어로 작성합니다. 단, `inputText` 값은 항상 ASCII입니다 (3.3.2 참조).
 
 **요소 탐색 전략**: `text`로 찾을 수 없는 요소는 `id` → `index` 순서로 폴백합니다.
 UIAutomator dump를 통해 실제 요소를 확인할 수 있습니다:
@@ -372,11 +526,11 @@ UIAutomator dump를 통해 실제 요소를 확인할 수 있습니다:
 adb shell uiautomator dump /data/local/tmp/ui.xml && adb pull /data/local/tmp/ui.xml /tmp/ui.xml
 ```
 
-#### 3.3 interaction_dependencies 처리
+#### 3.4 interaction_dependencies 처리
 
 의존성이 있는 인터랙션 쌍은 **단일 YAML 파일**에 순서대로 배치합니다.
 
-#### 3.4 생성 예시
+#### 3.5 생성 예시
 
 **단일 화면 flow (.feature Background 기반)**:
 
@@ -518,7 +672,27 @@ JUnit 리포트가 없는 경우 Maestro 표준 출력에서 Pass/Fail 결과를
 ❌ Flow: <scenario_name>  → FAILED (reason)
 ```
 
-#### 5.2 결과 판정
+#### 5.2 실패 원인 자동 분류
+
+FAIL 결과의 에러 메시지를 패턴 분석하여 자동으로 원인을 분류합니다.
+
+| 에러 메시지 패턴 | 분류 | 태그 | 의미 |
+|---|---|---|---|
+| `"MANUAL TEST"` | 수동 전용 | `@manual-only` | 시뮬레이션 불가 시나리오 |
+| `"Unicode character input is not supported"` | 한글 입력 오류 | `unicode-error` | inputText에 non-ASCII 포함 (3.3.2 위반) |
+| `"is not a valid command"` | 명령어 오류 | `invalid-command` | 화이트리스트 미포함 명령어 (3.3.1 위반) |
+| `"Unable to find"` + `id:` | 요소 미발견 | `element-not-found` | testTag 누락 또는 화면 미도달 |
+| `"Unable to find"` + `text:` | 텍스트 미발견 | `text-not-found` | UI 텍스트 불일치 또는 화면 미도달 |
+| `"Timeout"` / `"timed out"` | 타임아웃 | `timeout` | 로딩 지연 또는 화면 전환 실패 |
+| `"App .* is not installed"` | 앱 미설치 | `app-not-installed` | 기기에 앱 미설치 |
+| `"No devices found"` | 기기 미연결 | `no-device` | ADB 기기 미연결 |
+| 기타 | 미분류 | `unknown` | 수동 확인 필요 |
+
+분류 결과는 Phase 6 보고서의 이슈 목록에 태그로 포함됩니다.
+
+**자동 교정 제안**: `unicode-error` 또는 `invalid-command` 분류 시, 해당 YAML 파일의 자동 교정을 제안합니다.
+
+#### 5.3 결과 판정
 
 | Maestro 결과 | 판정 | 심각도 |
 |---|---|---|
@@ -526,7 +700,7 @@ JUnit 리포트가 없는 경우 Maestro 표준 출력에서 Pass/Fail 결과를
 | FAILED | 🔴 런타임 버그 | Critical |
 | 실행 오류 (기기/앱 문제) | ⚠️ Skip | — |
 
-#### 5.3 심각도 기준
+#### 5.4 심각도 기준
 
 | 등급 | 기준 |
 |---|---|

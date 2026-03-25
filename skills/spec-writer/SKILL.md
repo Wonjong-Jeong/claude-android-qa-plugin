@@ -4,7 +4,7 @@ description: >
   Use this skill when the user wants to write Gherkin feature specs and ViewModel unit tests from a Figma design spec,
   screen description, or existing UI spec. Triggers on phrases like "스펙 작성해줘", "feature 파일 써줘",
   "테스트 코드 작성해줘", "뷰모델 테스트 짜줘", "Figma 보고 테스트 만들어줘", "/spec-writer".
-version: 2.1.0
+version: 2.2.0
 ---
 
 # Spec Writer
@@ -292,8 +292,34 @@ Scenario: 검색 결과에서 진입 시 검색어 하이라이트 표시
 API 실패처럼 앱 실행 중 DI 주입 없이는 재현할 수 없는 케이스에 태그를 붙입니다.
 ui-test-agent가 이 태그를 보고 UI 테스트 생성을 건너뛰고 보고서에 "수동 테스트 필요"로 분류합니다.
 
+**자동 판별 규칙**: 아래 키워드가 Scenario의 Given/When/Then에 포함되면 자동으로 `@manual-only`를 추가하고, `reason` 태그를 함께 붙입니다.
+
+| 키워드 패턴 | reason 태그 | 의미 |
+|---|---|---|
+| "실패", "에러 발생", "타임아웃", "오류" | `simulation-impossible` | 에러 상황 시뮬레이션 불가 |
+| "API 실패", "서버 오류", "네트워크 끊김" | `simulation-impossible` | 서버 장애 시뮬레이션 불가 |
+| "로딩 중", "로딩 인디케이터", "스피너" | `transient-state` | 일시적 상태 캡처 어려움 |
+| "등록 완료", "서버 응답", "API 호출 성공" | `api-dependent` | 실제 서버 응답 의존 |
+| "업로드 실패", "이미지 업로드 에러" | `simulation-impossible` | 업로드 실패 시뮬레이션 불가 |
+
+초안 제시 시 자동 판별된 `@manual-only`를 reason과 함께 표시합니다:
+
+```
+  @manual-only reason=simulation-impossible
+  Scenario 2: 좋아요 API 실패 시 롤백
+    Given 로그인 상태
+    When 좋아요 버튼 탭 (API 실패 상황)
+    Then 하트 아이콘 원상복구 + 에러 토스트
+
+  @manual-only reason=api-dependent
+  Scenario 5: 등록 완료 후 홈 화면 이동
+    ...
+```
+
+사용자가 `@manual-only`를 제거하거나 추가할 수 있습니다.
+
 ```gherkin
-@manual-only
+@manual-only reason=simulation-impossible
 Scenario: 좋아요 API 실패 시 낙관적 업데이트 롤백
   Given 사용자가 로그인한 상태이다
   And 좋아요 API가 실패하는 상황이다
@@ -301,6 +327,45 @@ Scenario: 좋아요 API 실패 시 낙관적 업데이트 롤백
   Then 하트 아이콘이 원래 상태로 복구된다
   And 에러 토스트 메시지가 표시된다
 ```
+
+### 규칙 G7 — 환경 조건 태그: Background Given에서 자동 추출
+
+Background의 Given 조건이 특정 환경 상태를 전제로 하는 경우, 해당 조건을 태그로 자동 추출합니다.
+이 태그는 ui-test-agent가 테스트 실행 전 환경 조건을 확인하는 데 사용됩니다.
+
+| Given 패턴 | 자동 추출 태그 |
+|---|---|
+| "그룹이 있는 상태", "그룹에 가입한 상태" | `@requires-group` |
+| "로그인한 상태", "로그인 완료" | `@requires-login` |
+| "아기가 등록된 상태" | `@requires-baby` |
+| "알림이 있는 상태" | `@requires-data` |
+| "비로그인 상태", "로그아웃 상태" | `@requires-logout` |
+
+```gherkin
+@requires-group
+Feature: 홈 피드 화면 — 피드 조회 기능
+
+Background:
+  Given 사용자가 그룹이 있는 상태이다     ← 이 조건에서 @requires-group 자동 추출
+  And 홈 화면에 진입한다
+```
+
+### 규칙 G8 — Maestro 입력 힌트: 한글 테스트 데이터와 ASCII 매핑
+
+`.feature` 파일의 When 단계에 한글 입력 데이터가 포함된 경우, ui-test-agent가 Maestro YAML 생성 시 ASCII로 대체할 수 있도록 힌트 주석을 추가합니다.
+
+BDD 명세로서 `.feature` 파일의 한글 데이터는 유지하되, `# maestro-input:` 주석으로 ASCII 대체값을 명시합니다.
+
+```gherkin
+Scenario: 닉네임 입력 후 다음 버튼 활성화
+  Given 아기 등록 화면에 진입한다
+  When 닉네임 필드에 "엄마"를 입력한다          # maestro-input: "mom"
+  And 아기 이름 필드에 "이인우"를 입력한다        # maestro-input: "TestBaby"
+  Then 다음 버튼이 활성화된다
+```
+
+ui-test-agent는 `# maestro-input:` 주석이 있으면 해당 값을 `inputText`에 사용합니다.
+주석이 없으면 ui-test-agent가 자체 한글→ASCII 매핑 테이블로 자동 변환합니다.
 
 ---
 

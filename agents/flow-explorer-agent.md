@@ -110,6 +110,32 @@ mcp__figma-desktop__get_design_context: node_id = <해당 Frame node_id>
 - 마지막 화면의 CTA 버튼 텍스트가 다음 Feature 이름과 대응되는 경우 → `@flow-ref` 의존성으로 기록
 - 판단 불가 시 → `❓ 불명`으로 표시 후 Phase 3에서 질문
 
+#### 2.5 순환 의존성 탐지
+
+Feature 간 `@flow-ref` 의존성을 방향 그래프로 구성하고 순환(cycle)을 탐지합니다.
+
+```
+예: Login → Home → Settings → Login  (순환!)
+    Home ↔ Onboarding               (상호 참조)
+```
+
+순환 감지 시:
+1. Phase 4 분기 트리 문서에 `⚠️ 순환 의존성` 경고 섹션 추가
+2. 순환 경로의 각 Feature에 `@circular-dependency` 태그 부여
+3. 순환 경로에 대한 테스트 커버리지 제한사항 명시
+
+```
+⚠️ 순환 의존성 발견
+━━━━━━━━━━━━━━━━━━━
+  Login ↔ FindAccount  (Login → 계정 찾기 버튼, FindAccount → 로그인으로 돌아가기)
+  Home ↔ Onboarding    (Home → 온보딩 미완료 시 리다이렉트, Onboarding → 완료 후 홈)
+
+영향:
+  - qa-orchestrator의 위상 정렬에서 해당 Feature들은 동일 순위로 처리됩니다
+  - 테스트 실행 시 한쪽 flow를 먼저 실행하고, 나머지는 인라인 단계로 대체합니다
+  - 순환 경로 전체를 커버하는 E2E flow는 별도 작성이 필요합니다
+```
+
 ---
 
 ### Phase 3 — 모호한 항목 확인

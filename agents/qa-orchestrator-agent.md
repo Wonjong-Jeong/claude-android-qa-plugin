@@ -49,17 +49,31 @@ exclude_features:                          # 선택 — 제외할 Feature 목록
 
 ### Phase 1 — 환경 확인
 
-#### 1.1 Maestro CLI 확인
+#### 1.1 Maestro CLI 설치 및 PATH 확인
+
+Maestro 바이너리를 자동 탐지합니다. PATH에 없는 경우 일반적인 설치 위치도 확인합니다.
 
 ```bash
-maestro --version
+# 1차: PATH 탐색
+which maestro 2>/dev/null || command -v maestro 2>/dev/null
+
+# 2차: 일반적인 설치 위치 폴백
+[ -x "$HOME/.maestro/bin/maestro" ] && echo "$HOME/.maestro/bin/maestro"
+[ -x "/opt/homebrew/bin/maestro" ] && echo "/opt/homebrew/bin/maestro"
 ```
+
+| 결과 | 처리 |
+|---|---|
+| 바이너리 발견됨 | ✅ `MAESTRO_BIN` 변수에 전체 경로 저장 |
+| 어디에서도 미발견 | ⚠️ 아래 안내 출력 |
 
 미설치 시:
 ```
 ⚠️ Maestro CLI가 설치되어 있지 않습니다.
   yaml_only 모드로 전환하여 YAML만 생성합니다. (y/n)
 ```
+
+> ℹ️ 이후 Phase 4의 모든 `maestro` 명령은 `$MAESTRO_BIN`으로 실행합니다.
 
 #### 1.2 ADB 기기 확인
 
