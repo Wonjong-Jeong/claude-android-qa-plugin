@@ -15,7 +15,19 @@ allowed-tools:
 # 일괄 디자인 QA (Figma 기준)
 
 `$ARGUMENTS`를 파싱하여 Figma 페이지/섹션 내 모든 화면 프레임을 탐색하고,
-프로젝트의 Composable과 자동 매칭하여 `design-qa-agent`에 화면별로 위임합니다.
+프로젝트의 Composable과 자동 매칭한 후 3-tier 구조로 디자인 QA를 수행합니다.
+
+**3-tier 아키텍처**:
+```
+/design-qa-all (오케스트레이터)
+       |
+       ├─ Step 5.5: design-consistency-agent (전체 스캔)
+       │    → 상태 전환 / 컴포넌트 일관성 / 네트워크 이미지 감지
+       │    → SCREEN_HINTS 생성
+       │
+       └─ Step 6: design-qa-agent × N (화면별 정적 QA)
+            → hints를 전달받아 정밀 비교
+```
 
 ## Usage
 
@@ -161,9 +173,49 @@ SCREEN_GROUPS = [
 
 사용자가 확인하면 최종 `QA_TARGETS` 목록을 확정합니다.
 
+### Step 5.5. 디자인 일관성 분석 (design-consistency-agent)
+
+화면별 QA 전에, 전체 명세서를 스캔하여 주의 포인트를 파악합니다.
+
+```
+Agent(design-consistency-agent):
+  screen_groups:
+    - screen_name: <화면명>
+      figma_nodes:
+        - { node_id: "<node_id>", label: "<label>" }
+        - ...
+      composable: <매칭된 Composable>
+      module_path: <매칭된 모듈>
+    - ...  (QA_TARGETS 전체)
+  project_root: <PROJECT_ROOT>
+```
+
+**반환값**: `SCREEN_HINTS` — 화면별 주의 포인트
+
+```
+SCREEN_HINTS = {
+  "<화면명>": {
+    state_transitions: [...],     # 상태별 UI 변화 + 코드 구현 여부
+    network_images: [...],        # 네트워크 이미지 영역 (마스킹 대상)
+    consistency_alerts: [...],    # 크로스 화면 불일치 경고
+    non_standard_colors: [...]    # 비표준 색상
+  },
+  ...
+}
+```
+
+**진행 상황 표시**:
+```
+[일관성 분석] 전체 명세서 스캔 중...
+[일관성 분석] 완료 — 상태 전환: X건, 네트워크 이미지: Y건, 일관성 경고: Z건
+```
+
+> consistency-report.md가 `docs/design-qa/`에 저장됩니다.
+
 ### Step 6. 일괄 QA 실행
 
-확정된 QA_TARGETS를 순차적으로 `design-qa-agent`에 위임합니다:
+확정된 QA_TARGETS를 순차적으로 `design-qa-agent`에 위임합니다.
+**SCREEN_HINTS를 각 화면에 전달하여 정밀도를 높입니다.**
 
 ```
 각 target에 대해:
@@ -178,6 +230,7 @@ SCREEN_GROUPS = [
     module_path: <매칭된 모듈>
     qa_scope: <범위>
     device_config: <디바이스>
+    hints: SCREEN_HINTS["<화면명>"]    # consistency-agent가 생성한 hints
 ```
 
 **진행 상황 표시**:
@@ -205,6 +258,20 @@ SCREEN_GROUPS = [
 - **Figma 소스**: <Figma URL>
 - **검증 화면**: N개 / 스킵: K개
 - **캡처 방식**: Paparazzi (DeviceConfig.<DEVICE_CONFIG>)
+- **일관성 분석**: design-consistency-agent 수행 완료
+
+---
+
+## 일관성 분석 요약 (design-consistency-agent)
+
+| 항목 | 건수 |
+|------|------|
+| 상태 전환 감지 | N건 (IMPLEMENTED: X / MISSING: Y / PARTIAL: Z) |
+| 네트워크 이미지 | N건 (마스킹 적용) |
+| 크로스 화면 불일치 | N건 (INFO) |
+| 비표준 색상 | N건 |
+
+> 상세: [consistency-report.md](./consistency-report.md)
 
 ---
 
