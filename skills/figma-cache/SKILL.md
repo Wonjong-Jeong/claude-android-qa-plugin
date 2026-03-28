@@ -1,5 +1,5 @@
 ---
-description: "Figma 디자인 명세서를 로컬 캐시로 내보내어 API 호출 없이 반복 QA를 가능하게 합니다. Rate limit 회피."
+description: "Figma 명세서 데이터를 로컬에 캐싱하여 API 호출 없이 반복 활용할 수 있게 합니다. Rate limit 회피."
 allowed-tools:
   - Read
   - Write
@@ -25,7 +25,7 @@ allowed-tools:
 ## Usage
 
 ```
-/design-qa-export
+/figma-cache
 Figma: <Figma 페이지 또는 섹션 URL>
 딜레이: 2              # 선택, API 호출 간 대기 초 (기본: 2)
 소스: mcp              # 선택, mcp(기본) | rest-api
@@ -34,7 +34,7 @@ Figma: <Figma 페이지 또는 섹션 URL>
 
 이어서 수집 (rate limit으로 중단된 경우):
 ```
-/design-qa-export --resume
+/figma-cache --resume
 ```
 
 > MCP rate limit 도달 시 REST API로 자동 전환을 시도합니다 (토큰이 환경변수 `FIGMA_TOKEN`에 있는 경우).
@@ -248,7 +248,7 @@ mkdir -p "$CACHE_DIR"
         REST API로 전환하려면 FIGMA_TOKEN을 설정하세요:
           export FIGMA_TOKEN=<your-token>
         이어서 수집:
-          /design-qa-export --resume"
+          /figma-cache --resume"
 ```
 
 **기타 에러 처리**:
@@ -315,7 +315,7 @@ API 호출: K회
   /design-qa-all --cache
   모듈: feature/signup, feature/home
 
-캐시 유효기간: Figma 명세가 변경되면 다시 /design-qa-export를 실행하세요.
+캐시 유효기간: Figma 명세가 변경되면 다시 /figma-cache를 실행하세요.
 ```
 
 ---

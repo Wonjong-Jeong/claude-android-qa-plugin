@@ -59,7 +59,7 @@ Figma: https://www.figma.com/design/ABC123/MyApp?node-id=100-200
 모듈: feature/signup, feature/home
 ```
 
-> 캐시 모드는 `/design-qa-export`로 사전 수집된 `.figma-cache/` 데이터를 사용합니다.
+> 캐시 모드는 `/figma-cache`로 사전 수집된 `.figma-cache/` 데이터를 사용합니다.
 > Figma API 호출 0건으로 전체 QA를 수행합니다.
 
 ---
@@ -112,7 +112,7 @@ CACHE_DIR = <PROJECT_ROOT>/.figma-cache
 캐시가 없거나 손상된 경우:
 ```
 ".figma-cache가 없습니다.
- 먼저 /design-qa-export로 Figma 데이터를 수집하세요."
+ 먼저 /figma-cache로 Figma 데이터를 수집하세요."
 ```
 
 ### Step 2. Figma 구조 탐색 — 화면 프레임 목록 추출
