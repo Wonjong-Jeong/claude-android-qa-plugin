@@ -29,7 +29,7 @@ color_map: <프로젝트 색상 토큰 맵>
 micro_components: [                  # 소형 컴포넌트 인벤토리 (≤48dp)
   { type, source_file, source_line, properties, figma_match }
 ]
-numeric_results: <Phase 3.5 수치 비교 결과>
+numeric_results: <spec-comparator 수치 비교 결과>
 network_image_zones: [               # 마스킹 대상 영역
   { component, figma_bounds, masking_strategy }
 ]
@@ -39,7 +39,6 @@ transition_alerts: [                 # 상태 전환 주의 포인트
 dp_ratio: <DP_RATIO>
 pixel_tool: <imagemagick | python3_pil | none>
 ssim_tool: <skimage | fallback>
-test_files: []                       # 선택 — Phase 4.5 교차 검증
 hints: {}                            # 선택 — design-consistency-agent hints
 ```
 
@@ -92,19 +91,9 @@ hints: {}                            # 선택 — design-consistency-agent hints
 
 ---
 
-## Phase 4.5 — 테스트 코드 교차 검증 (선택)
-
-`test_files` 제공 시 실행. 기존 테스트에서 검증하는 UI 요소와 Figma 명세를 교차 대조:
-
-| Figma | Test | 소스코드 | 판정 |
-|-------|------|---------|------|
-| X | X | O | 불필요한 구현 의심 (Critical) |
-| O | O | X | 구현 누락 버그 (Critical) |
-| X | O | O | Figma 명세 누락 의심 (Minor) |
-
----
-
 ## Phase 5 — 이슈 분류
+
+> **참고**: 테스트 코드 교차 검증(Phase 4.5)은 `spec-comparator-agent`가 담당합니다.
 
 Phase 4 시각 비교 결과 + `numeric_results` (수치 검증) + `transition_alerts`를 종합하여 최종 심각도 부여.
 
