@@ -212,24 +212,43 @@ COMPOSABLE_TREE = {
 
 ## 출력 스펙
 
+### 파일 저장 (필수)
+
+분석 결과를 JSON 파일로 저장하고, 경로를 반환합니다:
+
 ```
-composable_fqn: <FQN>
-screen_files: [<파일 경로 목록>]
-preview_funs: [{ name, params }]
-theme_name: <테마명>
-theme_composable: <테마 Composable명>
-color_map: { <토큰명>: <HEX> }
-state_instances: { <라벨>: <인스턴스 코드> }
-conditional_branches: [{ file, line, condition, components, figma_label_hint }]
-micro_components: [{ type, source_file, source_line, size, colors, shape }]
-source_values: {
-  <file:line>: {
-    composable: "Button",
-    modifier_chain: [{ modifier: "padding", value: "16.dp", layer: "outer" }, ...],
-    params: { text: "로그인", fontSize: "16.sp", fontWeight: "Bold" }
-  }
+output_path: /tmp/design-qa/<screen_name>/source-analysis.json
+```
+
+파일 저장 후, 반환 메시지에 **파일 경로만** 포함합니다:
+
+```
+source_analysis_path: /tmp/design-qa/<screen_name>/source-analysis.json
+error: null
+```
+
+### 파일 내용
+
+```json
+{
+  "composable_fqn": "<FQN>",
+  "screen_files": ["<파일 경로 목록>"],
+  "preview_funs": [{ "name": "...", "params": "..." }],
+  "theme_name": "<테마명>",
+  "theme_composable": "<테마 Composable명>",
+  "color_map": { "<토큰명>": "<HEX>" },
+  "state_instances": { "<라벨>": "<인스턴스 코드>" },
+  "conditional_branches": [{ "file": "...", "line": 0, "condition": "...", "components": [], "figma_label_hint": "..." }],
+  "micro_components": [{ "type": "...", "source_file": "...", "source_line": 0, "size": "...", "colors": "...", "shape": "..." }],
+  "source_values": {
+    "<file:line>": {
+      "composable": "Button",
+      "modifier_chain": [{ "modifier": "padding", "value": "16.dp", "layer": "outer" }],
+      "params": { "text": "로그인", "fontSize": "16.sp", "fontWeight": "Bold" }
+    }
+  },
+  "composable_tree": { }
 }
-composable_tree: { ... }   // Step 6.3의 트리 구조
 ```
 
 ---

@@ -21,26 +21,27 @@ tools:
 
 ```
 screen_name: <화면명>
+
+# 파일 경로 기반 입력 (오케스트레이터가 경로만 전달)
+figma_spec_path: /tmp/design-qa/<screen_name>/figma-spec.json
+source_analysis_path: /tmp/design-qa/<screen_name>/source-analysis.json
+spec_comparison_path: /tmp/design-qa/<screen_name>/spec-comparison.json
+snapshot_meta_path: /tmp/design-qa/<screen_name>/snapshot-meta.json
+output_dir: /tmp/design-qa/<screen_name>
+
 figma_screenshots: { "<label>": "<figma_screenshot_path>" }
-snapshot_images: { "<label>": "<paparazzi_snapshot_path>" }
-figma_spec: <Figma 파싱된 구조/수치 데이터>
-figma_token_map: <토큰명 → HEX/RGBA 매핑>
-color_map: <프로젝트 색상 토큰 맵>
-micro_components: [                  # 소형 컴포넌트 인벤토리 (≤48dp)
-  { type, source_file, source_line, properties, figma_match }
-]
-numeric_results: <spec-comparator 수치 비교 결과>
-network_image_zones: [               # 마스킹 대상 영역
-  { component, figma_bounds, masking_strategy }
-]
-transition_alerts: [                 # 상태 전환 주의 포인트
-  { component, impl_status }
-]
-dp_ratio: <DP_RATIO>
-pixel_tool: <imagemagick | python3_pil | none>
-ssim_tool: <skimage | fallback>
 hints: {}                            # 선택 — design-consistency-agent hints
 ```
+
+### 파일 로드
+
+실행 시작 시 필요한 파일들을 Read하여 데이터를 로드합니다:
+- `figma_spec_path` → figma_spec, figma_token_map
+- `source_analysis_path` → color_map, micro_components
+- `spec_comparison_path` → numeric_results
+- `snapshot_meta_path` → snapshot_images, dp_ratio, pixel_tool, ssim_tool
+
+> network_image_zones, transition_alerts는 hints에서 추출합니다.
 
 ---
 
@@ -125,28 +126,49 @@ Phase 4 시각 비교 결과 + `numeric_results` (수치 검증) + `transition_a
 
 ## 출력 스펙
 
+### 파일 저장 (필수)
+
+시각 비교 결과를 JSON 파일로 저장하고, 경로를 반환합니다:
+
 ```
-screen_ssim: <전체 화면 SSIM 점수>
-component_results: [
-  { component: "버튼", ssim: 0.97, judgment: "Pass", method: "quantitative" }
-]
-color_results: [
-  { component: "버튼", app_hex: "#FFBB00", figma_hex: "#FFBB00", dE: 0.0, status: "PASS" }
-]
-micro_component_results: [
-  { type: "Checkbox", size_match: true, color_dE: 0.5, ssim: 0.93, judgment: "Pass" }
-]
-issues: [
-  {
-    severity: "Critical",
-    method: "quantitative",
-    description: "버튼 색상 불일치",
-    figma_value: "#FFBB00",
-    source_value: "#FF9900",
-    confidence: "HIGH",
-    location: "SignUpScreen.kt:45"
-  }
-]
+output_path: /tmp/design-qa/<screen_name>/visual-comparison.json
+```
+
+파일 저장 후, 반환 메시지에 **파일 경로와 요약만** 포함합니다:
+
+```
+visual_comparison_path: /tmp/design-qa/<screen_name>/visual-comparison.json
+screen_ssim: 0.92
+summary: { pass: N, minor: N, critical: N }
+error: null
+```
+
+### 파일 내용
+
+```json
+{
+  "screen_ssim": 0.92,
+  "component_results": [
+    { "component": "버튼", "ssim": 0.97, "judgment": "Pass", "method": "quantitative" }
+  ],
+  "color_results": [
+    { "component": "버튼", "app_hex": "#FFBB00", "figma_hex": "#FFBB00", "dE": 0.0, "status": "PASS" }
+  ],
+  "micro_component_results": [
+    { "type": "Checkbox", "size_match": true, "color_dE": 0.5, "ssim": 0.93, "judgment": "Pass" }
+  ],
+  "issues": [
+    {
+      "severity": "Critical",
+      "method": "quantitative",
+      "description": "버튼 색상 불일치",
+      "figma_value": "#FFBB00",
+      "source_value": "#FF9900",
+      "confidence": "HIGH",
+      "location": "SignUpScreen.kt:45"
+    }
+  ]
+}
 ```
 
 ---

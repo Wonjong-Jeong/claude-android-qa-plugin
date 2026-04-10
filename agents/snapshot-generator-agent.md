@@ -29,14 +29,20 @@ screen_name: <화면 이름>
 project_root: <프로젝트 루트 경로>
 module_path: <모듈 경로>                # 기본값: app
 composable_fqn: <FQN>
-preview_funs: [{ name, params }]        # source-analyzer 결과
-state_instances: { <라벨>: <인스턴스 코드> }  # source-analyzer 결과
-theme_name: <테마명>                    # source-analyzer 결과
-theme_composable: <테마 Composable명>   # source-analyzer 결과
+
+# 파일 경로 기반 입력 (오케스트레이터가 경로만 전달)
+source_analysis_path: /tmp/design-qa/<screen_name>/source-analysis.json
+output_dir: /tmp/design-qa/<screen_name>
+
 figma_labels: [<Figma 노드 label 목록>] # 각 label에 대응하는 스냅샷 필요
 device_config: "PIXEL_5"               # 기본값
 paparazzi_ready: true                  # 환경 확인 결과
 ```
+
+### 파일 로드
+
+실행 시작 시 `source_analysis_path`를 Read하여 데이터를 로드합니다:
+- preview_funs, state_instances, theme_name, theme_composable
 
 ---
 
@@ -187,18 +193,40 @@ find <PROJECT_ROOT>/<MODULE_PATH>/src/test/snapshots -name "*DesignQa_<ScreenNam
 
 ## 출력 스펙
 
+### 파일 저장 (필수)
+
+스냅샷 메타데이터를 JSON 파일로 저장하고, 경로를 반환합니다:
+
 ```
+output_path: /tmp/design-qa/<screen_name>/snapshot-meta.json
+```
+
+파일 저장 후, 반환 메시지에 **파일 경로와 성공 여부만** 포함합니다:
+
+```
+snapshot_meta_path: /tmp/design-qa/<screen_name>/snapshot-meta.json
 paparazzi_success: true | false
-snapshot_images: {
-  "<label>": "<스냅샷 파일 경로>"
-}
-dp_ratio: <DP_RATIO>
-test_file: "<생성된 테스트 파일 경로>"
-unmapped_labels: ["<매핑 실패한 Figma label>"]
-pixel_tool: <imagemagick | python3_pil | none>
-ssim_tool: <skimage | fallback>
-reason: "<실패 사유>"   # paparazzi_success=false 시
+error: null
 ```
+
+### 파일 내용
+
+```json
+{
+  "paparazzi_success": true,
+  "snapshot_images": {
+    "<label>": "<스냅샷 파일 경로>"
+  },
+  "dp_ratio": 2.625,
+  "test_file": "<생성된 테스트 파일 경로>",
+  "unmapped_labels": [],
+  "pixel_tool": "python3_pil",
+  "ssim_tool": "skimage",
+  "reason": null
+}
+```
+
+> 스냅샷 이미지 자체는 Paparazzi가 생성하는 경로에 그대로 위치합니다. `snapshot_images`는 해당 경로의 맵입니다.
 
 ---
 

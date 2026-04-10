@@ -28,21 +28,21 @@ tools:
 screen_name: <화면 이름>
 project_root: <프로젝트 루트 경로>
 
-# source-analyzer-agent 결과
-composable_tree: { ... }               # Composable 호출 구조 트리
-source_values: { <file:line>: { composable, modifier_chain, params } }
-color_map: { <토큰명>: <HEX> }
-conditional_branches: [{ file, line, condition, components, figma_label_hint }]
-micro_components: [{ type, source_file, source_line, size, colors, shape }]
-
-# figma-spec-parser-agent 결과
-figma_spec: { <node_id>: { label, root: { ... } } }
-figma_token_map: { <토큰명>: <값> }
+# 파일 경로 기반 입력 (오케스트레이터가 경로만 전달)
+source_analysis_path: /tmp/design-qa/<screen_name>/source-analysis.json
+figma_spec_path: /tmp/design-qa/<screen_name>/figma-spec.json
+output_dir: /tmp/design-qa/<screen_name>
 
 # 선택
 hints: {}                              # design-consistency-agent에서 전달
 test_files: []                         # 테스트 코드 교차 검증용
 ```
+
+### 파일 로드
+
+실행 시작 시 두 파일을 Read하여 데이터를 로드합니다:
+- `source_analysis_path` → composable_tree, source_values, color_map, conditional_branches, micro_components
+- `figma_spec_path` → figma_spec, figma_token_map
 
 ---
 
@@ -213,40 +213,62 @@ ELEMENT_MAP의 텍스트 노드 매핑 기반 1:1 대조:
 
 ## 출력 스펙
 
+### 파일 저장 (필수)
+
+비교 결과를 JSON 파일로 저장하고, 경로를 반환합니다:
+
 ```
-element_map: {
-  "<figma_node_id>": {
-    figma_name, figma_type,
-    source_file, source_line, source_composable,
-    match_method, confidence
-  }
+output_path: /tmp/design-qa/<screen_name>/spec-comparison.json
+```
+
+파일 저장 후, 반환 메시지에 **파일 경로와 요약만** 포함합니다:
+
+```
+spec_comparison_path: /tmp/design-qa/<screen_name>/spec-comparison.json
+mapping_rate: 0.85
+summary: { pass: N, minor: N, critical: N }
+error: null
+```
+
+### 파일 내용
+
+```json
+{
+  "element_map": {
+    "<figma_node_id>": {
+      "figma_name": "...", "figma_type": "...",
+      "source_file": "...", "source_line": 0, "source_composable": "...",
+      "match_method": "text_content", "confidence": "HIGH"
+    }
+  },
+  "unmatched_figma": [{ "node_id": "...", "name": "...", "type": "...", "reason": "..." }],
+  "unmatched_source": [{ "file": "...", "line": 0, "composable": "...", "reason": "..." }],
+  "structure_issues": [
+    {
+      "severity": "Critical",
+      "layer": "ContentRow",
+      "figma_value": "HORIZONTAL",
+      "source_value": "Column",
+      "description": "배치 방향 불일치"
+    }
+  ],
+  "numeric_results": [
+    {
+      "element": "SubmitButton",
+      "property": "높이",
+      "figma_value": "52dp",
+      "source_value": "52.dp",
+      "tolerance": "±1dp",
+      "method": "quantitative",
+      "result": "Pass",
+      "source_location": "LoginScreen.kt:78"
+    }
+  ],
+  "text_issues": [{ "element": "...", "figma_text": "...", "source_text": "...", "severity": "..." }],
+  "icon_issues": [{ "element": "...", "figma_icon": "...", "source_icon": "...", "method": "..." }],
+  "test_cross_check": [{ "figma": "...", "test": "...", "source": "...", "judgment": "..." }],
+  "mapping_rate": 0.85
 }
-unmatched_figma: [{ node_id, name, type, reason }]
-unmatched_source: [{ file, line, composable, reason }]
-structure_issues: [
-  {
-    severity: "Critical" | "Minor",
-    layer: "ContentRow",
-    figma_value: "HORIZONTAL",
-    source_value: "Column",
-    description: "배치 방향 불일치"
-  }
-]
-numeric_results: [
-  {
-    element: "SubmitButton",
-    property: "높이",
-    figma_value: "52dp",
-    source_value: "52.dp",
-    tolerance: "±1dp",
-    method: "quantitative",
-    result: "Pass" | "Minor" | "Critical",
-    source_location: "LoginScreen.kt:78"
-  }
-]
-text_issues: [{ element, figma_text, source_text, severity }]
-icon_issues: [{ element, figma_icon, source_icon, method }]
-test_cross_check: [{ figma, test, source, judgment }]  # test_files 제공 시
 mapping_rate: 0.85  # 매핑 성공률
 ```
 

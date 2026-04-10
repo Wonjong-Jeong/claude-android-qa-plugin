@@ -28,30 +28,23 @@ project_root: <프로젝트 루트 경로>
 figma_node_ids: [<노드 ID 목록>]
 verification_mode: "paparazzi_and_numeric" | "numeric_only"
 
-# spec-comparator-agent 결과
-element_map: { ... }
-unmatched_figma: [...]
-unmatched_source: [...]
-structure_issues: [...]
-numeric_results: [...]
-text_issues: [...]
-icon_issues: [...]
-mapping_rate: 0.85
-
-# visual-comparator-agent 결과 (선택 — paparazzi 사용 시)
-screen_ssim: 0.92
-component_results: [...]
-color_results: [...]
-micro_component_results: [...]
-visual_issues: [...]
-
-# snapshot-generator-agent 결과 (선택)
-snapshot_images: { ... }
-test_file: "<테스트 파일 경로>"
+# 파일 경로 기반 입력 (오케스트레이터가 경로만 전달)
+spec_comparison_path: /tmp/design-qa/<screen_name>/spec-comparison.json
+visual_comparison_path: /tmp/design-qa/<screen_name>/visual-comparison.json  # 선택
+snapshot_meta_path: /tmp/design-qa/<screen_name>/snapshot-meta.json          # 선택
+source_analysis_path: /tmp/design-qa/<screen_name>/source-analysis.json
 
 # 골든 관리
 update_golden: false
 ```
+
+### 파일 로드
+
+실행 시작 시 필요한 파일들을 Read하여 데이터를 로드합니다:
+- `spec_comparison_path` → element_map, unmatched_figma, unmatched_source, structure_issues, numeric_results, text_issues, icon_issues, mapping_rate
+- `visual_comparison_path` → screen_ssim, component_results, color_results, micro_component_results, issues (있으면)
+- `snapshot_meta_path` → snapshot_images, test_file (있으면)
+- `source_analysis_path` → composable_fqn (골든 메타데이터용)
 
 ---
 
