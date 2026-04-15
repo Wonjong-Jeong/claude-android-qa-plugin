@@ -1,5 +1,5 @@
 {
     "name": "claude-android-qa-plugin",
-    "description": "Android 앱 개발을 위한 디자인 QA, UI 테스트, 비즈니스 로직 스펙 작성 도구 모음",
-    "version": "1.1.0"
+    "description": "Design QA tool that quantitatively compares Figma design specs with Android Composable source code to verify implementation accuracy",
+    "version": "2.0.0"
 }
